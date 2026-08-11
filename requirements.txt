@@ -1,0 +1,9 @@
+openai-whisper
+pyannote.audio
+openai
+soundfile
+torch
+reportlab
+python-dotenv
+onnxruntime
+pypdf

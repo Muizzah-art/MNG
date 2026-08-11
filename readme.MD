@@ -1,0 +1,90 @@
+# Meeting Notes Generator
+
+Takes an audio recording of a meeting and produces:
+- A speaker-attributed, timestamped transcript (`meeting_transcript.pdf`)
+- An LLM-generated structured summary — objective, discussion points, action items, decisions (`meeting_summary.pdf`)
+
+## Project files
+
+| File | What it is |
+|---|---|
+| `MNG.py` | Main script — transcription, diarization, summarization, PDF generation |
+| `config.py` | Configuration (model settings, env var loading) |
+| `pdf_reader.py` | Small utility to read text back out of a generated PDF |
+| `MNG.m4a` | Sample test recording (5-speaker fictional sprint review) |
+| `actual_meeting_script.md` | The scripted dialogue `MNG.m4a` was recorded from — useful as a ground-truth reference for checking transcription/diarization accuracy |
+| `.gitignore` | Excludes `.env`, caches, and generated output from version control |
+| `requirements.txt` | Python dependencies |
+
+## How it works
+
+1. **Transcription** — [OpenAI Whisper](https://github.com/openai/whisper) (running locally) converts speech to text.
+2. **Speaker diarization** — [pyannote.audio](https://github.com/pyannote/pyannote-audio) identifies who spoke when.
+3. **Alignment** — Whisper's text segments are matched to pyannote's speaker turns by time overlap.
+4. **Summarization** — the aligned transcript is sent to an LLM (via [Groq](https://groq.com), free tier) to generate the structured summary.
+5. **Output** — both the raw transcript and the summary are saved as PDFs.
+
+## Requirements
+
+- Python 3.10+
+- [FFmpeg](https://ffmpeg.org/download.html) installed and available on your system `PATH`
+- A [Hugging Face](https://huggingface.co/) account with a token
+- A [Groq](https://console.groq.com/) API key (free tier)
+
+## Setup
+
+1. Clone the repo and install dependencies:
+   ```
+   pip install -r requirements.txt
+   ```
+
+2. Get your credentials:
+   - **Hugging Face token**: create one at https://huggingface.co/settings/tokens
+   - **Accept model access** — while logged into the account that owns your token, visit each of these and accept the terms:
+     - https://huggingface.co/pyannote/speaker-diarization-3.0
+     - https://huggingface.co/pyannote/segmentation-3.0
+     - https://huggingface.co/pyannote/speaker-diarization-community-1
+   - **Groq API key**: create one at https://console.groq.com/keys
+
+3. Create a `.env` file in the project root (never commit this):
+   ```
+   HF_TOKEN="your_hugging_face_token"
+   GROQ_API_KEY="your_groq_api_key"
+   ```
+
+4. Place your meeting recording in the project folder (or use the included `MNG.m4a` sample).
+
+## Usage
+
+Run directly:
+```
+python MNG.py
+```
+
+Or use it programmatically:
+
+```python
+from MNG import MeetingNotesGenerator
+
+generator = MeetingNotesGenerator(hf_token="...", whisper_model_size="small")
+result = generator.run("MNG.m4a", num_speakers=5)
+
+print(result["summary"])
+```
+
+To read text back out of a generated PDF:
+```
+python pdf_reader.py
+```
+
+## Known limitations
+
+- **Word-level accuracy**: Whisper's `small` model occasionally mishears jargon, project names, and less common personal names. Larger models (`medium`, `large`) improve this but take longer to run on CPU and require a bigger one-time download.
+- **Speaker attribution on short utterances**: brief responses ("all good," "nothing else") or fast back-and-forth exchanges are sometimes attributed to the wrong speaker. This is a structural limitation of diarization models generally (not enough audio to reliably fingerprint a voice), not something fixable with configuration alone.
+- Despite the above, the final LLM-generated summary (action items, decisions) has proven accurate in testing even when the raw transcript has these errors.
+
+## Notes
+
+- Runs on CPU — no GPU required, but expect processing time roughly 2-4x the audio's length depending on Whisper model size.
+- `whisper_model_size` options: `tiny`, `base`, `small`, `medium`, `large` — larger is more accurate but slower.
+- If Whisper mishears domain-specific jargon or names, pass an `initial_prompt` string to `run()` with the correct terms to bias transcription.

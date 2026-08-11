@@ -1,0 +1,13 @@
+.env
+
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+.cache/
+
+*.m4a
+*.wav
+meeting_transcript.pdf
+meeting_summary.pdf 
